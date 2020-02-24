@@ -1,7 +1,7 @@
 /*
  * File:   main_lab2.c
- * Author: Arevalo
- *
+ * Author: Israel Arevalo
+ * Materia: Electrónica digital 2
  * Created on 2 de febrero de 2020, 09:29 AM
  */
 
@@ -32,25 +32,32 @@
 #include <xc.h>
 #include <pic16f887.h>
 #include <stdint.h>
-#include "ADC.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <pic16f887.h>
+//#include "ADC.h"
 #include "USART.h"
+#include "SPI.h"
 
 #define _XTAL_FREQ 4000000
 
-//uint8_t cont = 0;
+//variables
+char res1[8];
+char res2[8];
+char reci = 0;
 
+//funciones prototipo
 void init(void);
 void inter_init(void);
 
 void __interrupt() inter (void){
-    //interrupción comunicación USART
-    if (PIR1bits.RCIF == 1){
+    if (PIR1bits.RCIF == 1){//Interrupción de transferencia USART
         if(RCSTAbits.OERR==1){
             RCSTAbits.CREN = 0;
             __delay_us(255);
         }
         else{
-            PORTB = RCREG; //escribe el valor del contador en los LEDS
+            reci = RCREG; //escribe el valor del contador en los LEDS
         }
     }
 }
@@ -59,42 +66,54 @@ void main(void) {
     init();
     inter_init();
     spi_conf(1);
+    recepcion_conf();
     transmision_conf();
-    //char cont = 0;
     uint8_t badc = 1;
-    char adc1 = 0;
-    char adc2 = 0;
-    SSPBUF = 0x01;
+    char adc1 = 0x00;
+    char adc2 = 0x00;
+    float val1 = 0;
+    float val2 = 0;
+    spi_escribir(0x01);
     while(1){
         //lectura del maestro al ADC del esclvo por SPI
         if (badc == 1 && spi_puede_leer() == 1){
+            //sentencia para leer el valor ADC del primer potenciometro
             adc1 = spi_leer();
             badc = 2;
-            SSPBUF = 0x02;
+            spi_escribir(0x02);
+            __delay_ms(250);
         }
         else if (badc == 2 && spi_puede_leer() == 1){
+            //Sentencia para leer el valor ADC del segundo potenciometro
             adc2 = spi_leer();
             badc = 1;
-            SSPBUF = 0x01;
+            spi_escribir(0x01);
+            __delay_ms(250);
         }
-        
-        //transmision de los resultados del ADC a la computadora
-        transmitir(adc1);
-        transmitir(adc2);
- 
+        //Conversion de los valores del ADC a decimales
+        val1 = adc1*(5.00/255);
+        sprintf(res1,"%1.1f",val1);
+        val2 = adc2*(5.00/255);
+        sprintf(res2,"%1.1f",val2);
+        //Se transmiten a la computadora los dos valores de ADC
+        transmitir(res1);
+        transmitir(res2);
+        //Se muestra en los LEDS el valor recibido proveniente de la computadora
+        PORTB = reci;
     }
     return;
 }
 
+//Inicialización de puertos
 void init(void){
     TRISB = 0x00;
     ANSEL = 0x00;
     ANSELH = 0x00;
     TRISCbits.TRISC7 = 1;
     TRISCbits.TRISC6 = 0;
-    recepcion_conf();
 }
 
+//Inicialización de interrupciones
 void inter_init(void){
     INTCONbits.GIE = 1;
     INTCONbits.PEIE = 1;
